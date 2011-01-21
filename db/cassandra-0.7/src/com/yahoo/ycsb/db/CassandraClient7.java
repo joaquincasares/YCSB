@@ -69,6 +69,9 @@ public class CassandraClient7 extends DB
   Cassandra.Client client;
 
   boolean _debug = false;
+  
+  String _table = "";
+  Exception errorexception = null;
 
   /**
    * Initialize any state for this DB. Called once per DB instance; there is one
@@ -171,15 +174,19 @@ public class CassandraClient7 extends DB
    */
   public int read(String table, String key, Set<String> fields, HashMap<String, String> result)
   {
-    Exception errorexception = null;
-    try
-    {
-      client.set_keyspace(table);
-    } catch (Exception e)
-    {
-      e.printStackTrace();
-      e.printStackTrace(System.out);
-      return Error;
+    if (!_table.equals(table)) {
+      // _hTable = null;
+      try 
+      {
+        client.set_keyspace(table);
+        _table = table;
+      }
+      catch (Exception e) 
+      {
+        e.printStackTrace();
+        e.printStackTrace(System.out);
+        return Error;
+      }
     }
 
     for (int i = 0; i < OperationRetries; i++)
@@ -187,7 +194,6 @@ public class CassandraClient7 extends DB
 
       try
       {
-
         SlicePredicate predicate;
         if (fields == null)
         {
@@ -204,7 +210,7 @@ public class CassandraClient7 extends DB
           ArrayList<ByteBuffer> fieldlist = new ArrayList<ByteBuffer>(fields.size());
           for (String s : fields)
           {
-	    fieldlist.add(ByteBuffer.wrap(s.getBytes("UTF-8")));
+            fieldlist.add(ByteBuffer.wrap(s.getBytes("UTF-8")));
           }
 
           predicate = new SlicePredicate();
@@ -280,16 +286,19 @@ public class CassandraClient7 extends DB
   public int scan(String table, String startkey, int recordcount, Set<String> fields,
       Vector<HashMap<String, String>> result)
   {
-    Exception errorexception = null;
-
-    try
-    {
-      client.set_keyspace(table);
-    } catch (Exception e)
-    {
-      e.printStackTrace();
-      e.printStackTrace(System.out);
-      return Error;
+    if (!_table.equals(table)) {
+      // _hTable = null;
+      try 
+      {
+        client.set_keyspace(table);
+        _table = table;
+      }
+      catch (Exception e) 
+      {
+        e.printStackTrace();
+        e.printStackTrace(System.out);
+        return Error;
+      }
     }
     
     for (int i = 0; i < OperationRetries; i++)
@@ -402,23 +411,28 @@ public class CassandraClient7 extends DB
    */
   public int insert(String table, String key, HashMap<String, String> values)
   {
-    Exception errorexception = null;
-
-    try
-    {
-      client.set_keyspace(table);
-    } catch (Exception e)
-    {
-      e.printStackTrace();
-      e.printStackTrace(System.out);
-      return Error;
+    if (!_table.equals(table)) {
+      try 
+      {
+        client.set_keyspace(table);
+        _table = table;
+      }
+      catch (Exception e) 
+      {
+        e.printStackTrace();
+        e.printStackTrace(System.out);
+        return Error;
+      }
     }
     
     for (int i = 0; i < OperationRetries; i++)
     {
-      // insert data
-      long timestamp = System.currentTimeMillis();
-
+      
+      if (_debug)
+      {
+        System.out.println("INSERT");
+      }
+      
       try
       {
         Map<ByteBuffer, Map<String, List<Mutation>>> batch_mutation = new HashMap<ByteBuffer, Map<String, List<Mutation>>>();
@@ -427,25 +441,19 @@ public class CassandraClient7 extends DB
         cfMutationMap.put(column_family, v);
         batch_mutation.put(ByteBuffer.wrap(key.getBytes("UTF-8")), cfMutationMap);
 
-        for (String field : values.keySet())
+        for (Map.Entry<String, String> entry : values.entrySet())
         {
-          String val = values.get(field);
-          Column col = new Column(ByteBuffer.wrap(field.getBytes("UTF-8")), ByteBuffer.wrap(val.getBytes("UTF-8")), timestamp);
-
-          ColumnOrSuperColumn c = new ColumnOrSuperColumn();
-          c.setColumn(col);
-          c.unsetSuper_column();
           Mutation m = new Mutation();
+          ColumnOrSuperColumn c = new ColumnOrSuperColumn();
           m.setColumn_or_supercolumn(c);
           v.add(m);
+          
+          c.setColumn( new Column(ByteBuffer.wrap(entry.getKey().getBytes("UTF-8")), 
+                                  ByteBuffer.wrap(entry.getValue().getBytes("UTF-8")), 
+                                  System.currentTimeMillis()) );
         }
 
         client.batch_mutate(batch_mutation, ConsistencyLevel.ONE);
-
-        if (_debug)
-        {
-          System.out.println("INSERT");
-        }
 
         return Ok;
       } catch (Exception e)
@@ -476,24 +484,29 @@ public class CassandraClient7 extends DB
    */
   public int delete(String table, String key)
   {
-    Exception errorexception = null;
-
-    try
-    {
-      client.set_keyspace(table);
-    } catch (Exception e)
-    {
-      e.printStackTrace();
-      e.printStackTrace(System.out);
-      return Error;
+    if (!_table.equals(table)) {
+      // _hTable = null;
+      try 
+      {
+        client.set_keyspace(table);
+        _table = table;
+      }
+      catch (Exception e) 
+      {
+        e.printStackTrace();
+        e.printStackTrace(System.out);
+        return Error;
+      }
     }
 
     for (int i = 0; i < OperationRetries; i++)
     {
       try
       {
-	client.remove(ByteBuffer.wrap(key.getBytes("UTF-8")), new ColumnPath(column_family), System.currentTimeMillis(),
-            ConsistencyLevel.ONE);
+        client.remove(ByteBuffer.wrap(key.getBytes("UTF-8")), 
+                      new ColumnPath(column_family), 
+                      System.currentTimeMillis(),
+                      ConsistencyLevel.ONE);
 
         if (_debug)
         {
