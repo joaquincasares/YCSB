@@ -72,6 +72,9 @@ public class CassandraClient7 extends DB
   
   String _table = "";
   Exception errorexception = null;
+  
+  List<Mutation> mutations = new ArrayList<Mutation>();
+  Map<String, List<Mutation>> mutationMap = new HashMap<String, List<Mutation>>();
 
   /**
    * Initialize any state for this DB. Called once per DB instance; there is one
@@ -435,25 +438,50 @@ public class CassandraClient7 extends DB
       
       try
       {
-        Map<ByteBuffer, Map<String, List<Mutation>>> batch_mutation = new HashMap<ByteBuffer, Map<String, List<Mutation>>>();
-        ArrayList<Mutation> v = new ArrayList<Mutation>(values.size());
-        Map<String, List<Mutation>> cfMutationMap = new HashMap<String, List<Mutation>>();
-        cfMutationMap.put(column_family, v);
-        batch_mutation.put(ByteBuffer.wrap(key.getBytes("UTF-8")), cfMutationMap);
+        
+        /**
+        FROM stress.java for reference.
+        
+        List<Mutation> mutations = new ArrayList<Mutation>(values.size());
+        Map<String, List<Mutation>> mutationMap = new HashMap<String, List<Mutation>>();
+
+        for (Column c : columns){
+            ColumnOrSuperColumn column = new ColumnOrSuperColumn().setColumn(c);
+            mutations.add(new Mutation().setColumn_or_supercolumn(column));}
+
+        mutationMap.put("Standard1", mutations);
+        
+        Map<ByteBuffer, Map<String, List<Mutation>>> record = new HashMap<ByteBuffer, Map<String, List<Mutation>>>();
+        record.put(ByteBuffer.wrap(key.getBytes("UTF-8")), mutationMap);
+        
+        String value = values.get(i % values.size());
+        
+        for (Column c : columns)
+                c.value = ByteBuffer.wrap(value.getBytes());
+                
+        client.batch_mutate(record, session.getConsistencyLevel());
+        */
+        
+        ByteBuffer wrappedKey = ByteBuffer.wrap(key.getBytes("UTF-8"));
 
         for (Map.Entry<String, String> entry : values.entrySet())
         {
-          Mutation m = new Mutation();
-          ColumnOrSuperColumn c = new ColumnOrSuperColumn();
-          m.setColumn_or_supercolumn(c);
-          v.add(m);
-          
-          c.setColumn( new Column(ByteBuffer.wrap(entry.getKey().getBytes("UTF-8")), 
-                                  ByteBuffer.wrap(entry.getValue().getBytes("UTF-8")), 
-                                  System.currentTimeMillis()) );
+          ColumnOrSuperColumn column = new ColumnOrSuperColumn();
+          column.setColumn( new Column( ByteBuffer.wrap(entry.getKey().getBytes("UTF-8")), 
+                                        ByteBuffer.wrap(entry.getValue().getBytes("UTF-8")), 
+                                        System.currentTimeMillis()) );
+                                        
+          mutations.add(new Mutation().setColumn_or_supercolumn(column));
         }
+        
+        mutationMap.put(column_family, mutations);
+        
+        Map<ByteBuffer, Map<String, List<Mutation>>> record = new HashMap<ByteBuffer, Map<String, List<Mutation>>>();
+        record.put(wrappedKey, mutationMap);
 
-        client.batch_mutate(batch_mutation, ConsistencyLevel.ONE);
+        client.batch_mutate(record, ConsistencyLevel.ONE);
+        mutations.clear();
+        mutationMap.clear();
 
         return Ok;
       } catch (Exception e)
