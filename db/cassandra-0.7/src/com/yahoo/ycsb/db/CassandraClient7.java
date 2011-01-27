@@ -75,6 +75,9 @@ public class CassandraClient7 extends DB
   
   List<Mutation> mutations = new ArrayList<Mutation>();
   Map<String, List<Mutation>> mutationMap = new HashMap<String, List<Mutation>>();
+  Map<ByteBuffer, Map<String, List<Mutation>>> record = new HashMap<ByteBuffer, Map<String, List<Mutation>>>();
+  
+  ColumnParent parent;
 
   /**
    * Initialize any state for this DB. Called once per DB instance; there is one
@@ -89,6 +92,7 @@ public class CassandraClient7 extends DB
     }
 
     column_family = getProperties().getProperty(COLUMN_FAMILY_PROPERTY, COLUMN_FAMILY_PROPERTY_DEFAULT);
+    parent = new ColumnParent(column_family);
 
     ConnectionRetries = Integer.parseInt(getProperties().getProperty(CONNECTION_RETRY_PROPERTY,
         CONNECTION_RETRY_PROPERTY_DEFAULT));
@@ -178,7 +182,6 @@ public class CassandraClient7 extends DB
   public int read(String table, String key, Set<String> fields, HashMap<String, String> result)
   {
     if (!_table.equals(table)) {
-      // _hTable = null;
       try 
       {
         client.set_keyspace(table);
@@ -200,42 +203,34 @@ public class CassandraClient7 extends DB
         SlicePredicate predicate;
         if (fields == null)
         {
-
-          SliceRange sliceRange = new SliceRange();
-          sliceRange.setStart(emptyByteBuffer);
-          sliceRange.setFinish(emptyByteBuffer);;
-          sliceRange.setCount(1000000);
-
-          predicate = new SlicePredicate();
-          predicate.setSlice_range(sliceRange);
-        } else
-        {
+          predicate = new SlicePredicate().setSlice_range(new SliceRange(emptyByteBuffer, emptyByteBuffer, false, 1000000));
+          
+        } else {
           ArrayList<ByteBuffer> fieldlist = new ArrayList<ByteBuffer>(fields.size());
           for (String s : fields)
           {
             fieldlist.add(ByteBuffer.wrap(s.getBytes("UTF-8")));
           }
 
-          predicate = new SlicePredicate();
-          predicate.setColumn_names(fieldlist);
+          predicate = new SlicePredicate().setColumn_names(fieldlist);
         }
 
-        ColumnParent parent = new ColumnParent(column_family);
-        List<ColumnOrSuperColumn> results = client.get_slice(ByteBuffer.wrap(key.getBytes("UTF-8")), parent, predicate,
-            ConsistencyLevel.ONE);
+        List<ColumnOrSuperColumn> results = client.get_slice(ByteBuffer.wrap(key.getBytes("UTF-8")), parent, predicate, ConsistencyLevel.ONE);
 
         if (_debug)
         {
-          System.out.print("READ: ");
+          System.out.print("Reading key: " + key);
         }
 
+        Column column;
+        String name;
+        String value;
         for (ColumnOrSuperColumn oneresult : results)
         {
 
-          Column column = oneresult.column;
-	    
-	  String name = new String(column.name.array(), column.name.position()+column.name.arrayOffset(), column.name.remaining());
-	  String value = new String(column.value.array(), column.value.position()+column.value.arrayOffset(), column.value.remaining());
+          column = oneresult.column;
+	        name = new String(column.name.array(), column.name.position()+column.name.arrayOffset(), column.name.remaining());
+      	  value = new String(column.value.array(), column.value.position()+column.value.arrayOffset(), column.value.remaining());
 
           result.put(name,value);
 
@@ -247,7 +242,7 @@ public class CassandraClient7 extends DB
 
         if (_debug)
         {
-          System.out.println("");
+          System.out.println();
         }
 
         return Ok;
@@ -290,7 +285,6 @@ public class CassandraClient7 extends DB
       Vector<HashMap<String, String>> result)
   {
     if (!_table.equals(table)) {
-      // _hTable = null;
       try 
       {
         client.set_keyspace(table);
@@ -312,48 +306,46 @@ public class CassandraClient7 extends DB
         SlicePredicate predicate;
         if (fields == null)
         {
-          SliceRange sliceRange = new SliceRange();
-          sliceRange.setStart(emptyByteBuffer);
-          sliceRange.setFinish(emptyByteBuffer);
-          sliceRange.setCount(1000000);
-          predicate = new SlicePredicate();
-          predicate.setSlice_range(sliceRange);
-        } else
-        {
+          predicate = new SlicePredicate().setSlice_range(new SliceRange(emptyByteBuffer, emptyByteBuffer, false, 1000000));
+          
+        } else {
           ArrayList<ByteBuffer> fieldlist = new ArrayList<ByteBuffer>(fields.size());
           for (String s : fields)
           {
-	    fieldlist.add(ByteBuffer.wrap(s.getBytes("UTF-8")));
+      	    fieldlist.add(ByteBuffer.wrap(s.getBytes("UTF-8")));
           }
-          predicate = new SlicePredicate();
-          predicate.setColumn_names(fieldlist);
+          
+          predicate = new SlicePredicate().setColumn_names(fieldlist);
         }
-        ColumnParent parent = new ColumnParent(column_family);
+        
         KeyRange kr = new KeyRange().setStart_key(startkey.getBytes("UTF-8")).setEnd_key(new byte[] {}).setCount(recordcount);
 
         List<KeySlice> results = client.get_range_slices(parent, predicate, kr, ConsistencyLevel.ONE);
 
         if (_debug)
         {
-          System.out.println("SCAN:");
+          System.out.println("Scanning startkey: " + startkey);
         }
 
+        HashMap<String, String> tuple;
         for (KeySlice oneresult : results)
         {
-          HashMap<String, String> tuple = new HashMap<String, String>();
-
+          tuple = new HashMap<String, String>();
+          
+          Column column;
+          String name;
+          String value;
           for (ColumnOrSuperColumn onecol : oneresult.columns)
           {
-	    Column column = onecol.column;
-	    String name = new String(column.name.array(), column.name.position()+column.name.arrayOffset(), column.name.remaining());
-	    String value = new String(column.value.array(), column.value.position()+column.value.arrayOffset(), column.value.remaining());
+	          column = onecol.column;
+      	    name = new String(column.name.array(), column.name.position()+column.name.arrayOffset(), column.name.remaining());
+      	    value = new String(column.value.array(), column.value.position()+column.value.arrayOffset(), column.value.remaining());
             
-	    tuple.put(name, value);
+      	    tuple.put(name, value);
 
             if (_debug)
             {
-              System.out
-                  .print("(" + name + "=" + value + ")");
+              System.out.print("(" + name + "=" + value + ")");
             }
           }
 
@@ -430,43 +422,19 @@ public class CassandraClient7 extends DB
     
     for (int i = 0; i < OperationRetries; i++)
     {
-      
       if (_debug)
       {
-        System.out.println("INSERT");
+        System.out.println("Inserting key: " + key);
       }
       
       try
-      {
-        
-        /**
-        FROM stress.java for reference.
-        
-        List<Mutation> mutations = new ArrayList<Mutation>(values.size());
-        Map<String, List<Mutation>> mutationMap = new HashMap<String, List<Mutation>>();
-
-        for (Column c : columns){
-            ColumnOrSuperColumn column = new ColumnOrSuperColumn().setColumn(c);
-            mutations.add(new Mutation().setColumn_or_supercolumn(column));}
-
-        mutationMap.put("Standard1", mutations);
-        
-        Map<ByteBuffer, Map<String, List<Mutation>>> record = new HashMap<ByteBuffer, Map<String, List<Mutation>>>();
-        record.put(ByteBuffer.wrap(key.getBytes("UTF-8")), mutationMap);
-        
-        String value = values.get(i % values.size());
-        
-        for (Column c : columns)
-                c.value = ByteBuffer.wrap(value.getBytes());
-                
-        client.batch_mutate(record, session.getConsistencyLevel());
-        */
-        
+      { 
         ByteBuffer wrappedKey = ByteBuffer.wrap(key.getBytes("UTF-8"));
 
+        ColumnOrSuperColumn column;
         for (Map.Entry<String, String> entry : values.entrySet())
         {
-          ColumnOrSuperColumn column = new ColumnOrSuperColumn();
+          column = new ColumnOrSuperColumn();
           column.setColumn( new Column( ByteBuffer.wrap(entry.getKey().getBytes("UTF-8")), 
                                         ByteBuffer.wrap(entry.getValue().getBytes("UTF-8")), 
                                         System.currentTimeMillis()) );
@@ -475,13 +443,13 @@ public class CassandraClient7 extends DB
         }
         
         mutationMap.put(column_family, mutations);
-        
-        Map<ByteBuffer, Map<String, List<Mutation>>> record = new HashMap<ByteBuffer, Map<String, List<Mutation>>>();
         record.put(wrappedKey, mutationMap);
 
         client.batch_mutate(record, ConsistencyLevel.ONE);
+        
         mutations.clear();
         mutationMap.clear();
+        record.clear();
 
         return Ok;
       } catch (Exception e)
@@ -513,7 +481,6 @@ public class CassandraClient7 extends DB
   public int delete(String table, String key)
   {
     if (!_table.equals(table)) {
-      // _hTable = null;
       try 
       {
         client.set_keyspace(table);
@@ -538,7 +505,7 @@ public class CassandraClient7 extends DB
 
         if (_debug)
         {
-          System.out.println("DELETE");
+          System.out.println("Delete key: " + key);
         }
 
         return Ok;
