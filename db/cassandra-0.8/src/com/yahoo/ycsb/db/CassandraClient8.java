@@ -40,7 +40,7 @@ import org.apache.cassandra.thrift.*;
 
 //XXXX if we do replication, fix the consistency levels
 /**
- * Cassandra 0.7 client for YCSB framework
+ * Cassandra 0.8 client for YCSB framework
  */
 public class CassandraClient8 extends DB
 {
@@ -431,13 +431,17 @@ public class CassandraClient8 extends DB
       { 
         ByteBuffer wrappedKey = ByteBuffer.wrap(key.getBytes("UTF-8"));
 
+        Column col;
         ColumnOrSuperColumn column;
         for (Map.Entry<String, String> entry : values.entrySet())
         {
+          col = new Column();
+          col.setName(ByteBuffer.wrap(entry.getKey().getBytes("UTF-8")));
+          col.setValue(ByteBuffer.wrap(entry.getValue().getBytes("UTF-8")));
+          col.setTimestamp(System.currentTimeMillis()));
+
           column = new ColumnOrSuperColumn();
-          column.setColumn( new Column( ByteBuffer.wrap(entry.getKey().getBytes("UTF-8")), 
-                                        ByteBuffer.wrap(entry.getValue().getBytes("UTF-8")), 
-                                        System.currentTimeMillis()) );
+          column.setColumn(col);
                                         
           mutations.add(new Mutation().setColumn_or_supercolumn(column));
         }
