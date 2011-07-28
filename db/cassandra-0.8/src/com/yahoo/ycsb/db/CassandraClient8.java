@@ -438,7 +438,7 @@ public class CassandraClient8 extends DB
           col = new Column();
           col.setName(ByteBuffer.wrap(entry.getKey().getBytes("UTF-8")));
           col.setValue(ByteBuffer.wrap(entry.getValue().getBytes("UTF-8")));
-          col.setTimestamp(System.currentTimeMillis()));
+          col.setTimestamp(System.currentTimeMillis());
 
           column = new ColumnOrSuperColumn();
           column.setColumn(col);
